@@ -1,0 +1,43 @@
+{
+  "_description": "Configuration for FixObsidian — copy to config.json and edit paths for your environment.",
+
+  "vault_path": "G:\\My Drive\\07_Notes\\3. Resources\\Library",
+  "library_path": "D:\\02 Library",
+
+  "unknown_author_fallback": "Unknown Auto",
+  "update_orphan_notes": true,
+  "strategy": "edit",
+
+  "organize": false,
+  "subfolder_map": {
+    "00 General Fiction": ["literature", "fiction", "novel", "story", "cuento", "relato", "novela"],
+    "01 Horror": ["horror", "terror", "lovecraft", "king", "macabre", "gothic", "dark fantasy"],
+    "02 Fantasy": ["fantasy", "fantasia", "magic", "magia", "sword", "dragon", "elfo", "myth"],
+    "03 Science Fiction": ["science fiction", "sci-fi", "scifi", "ciencia ficcion", "space", "dystopia"],
+    "04 Crime & Mystery": ["crime", "mystery", "misterio", "detective", "noir", "thriller", "suspense"],
+    "05 Romance": ["romance", "love", "amor", "erotic", "erotico", "novela rosa"],
+    "06 Historical Fiction": ["historical fiction", "historical novel", "novela historica", "historical"],
+    "07 Biography & Autobiography": ["biography", "autobiography", "biografia", "memoir", "vida"],
+    "08 Memoir & Self-Help": ["self-help", "autoayuda", "memoir", "personal development", "superacion"],
+    "09 History": ["history", "historia", "ancient", "medieval", "war", "guerra", "civilization"],
+    "10 Technical & Programming": ["technical", "programming", "programacion", "computer", "software", "code", "engineering", "technology"],
+    "11 Philosophy": ["philosophy", "filosofia", "ethics", "logic", "pensamiento", "wisdom"],
+    "12 Business & Economics": ["business", "economics", "economia", "management", "finance", "marketing", "entrepreneur"],
+    "13 Science & Technology": ["science", "technology", "tecnologia", "physics", "chemistry", "biology", "math"],
+    "14 Graphic & Literary Arts": ["graphic", "literary arts", "arte", "comic", "graphic novel", "poetry", "poesia"],
+    "15 Media & Archive": ["media", "archive", "reference", "reference", "diccionario", "encyclopedia"]
+  },
+
+  "isbn_enrichment": true,
+
+  "_notes": {
+    "vault_path": "Full path to your Obsidian vault containing the notes.",
+    "library_path": "Full path to your sorted PDF/ebook library.",
+    "unknown_author_fallback": "Name to use when author cannot be determined.",
+    "update_orphan_notes": "If true, update notes even when the PDF file no longer exists on disk.",
+    "strategy": "'edit' = modify notes in-place; 'recreate' = delete + recreate (not recommended without DB).",
+    "organize": "If true, move notes into subfolders by category (requires subfolder_map).",
+    "subfolder_map": "Maps category keywords to vault subfolder names. Add/remove entries as needed.",
+    "isbn_enrichment": "If true, add clickable Open Library links for ISBNs."
+  }
+}

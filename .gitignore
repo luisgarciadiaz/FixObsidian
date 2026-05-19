@@ -1,6 +1,9 @@
 # Environment
 .env
 
+# Local config (contains personal paths)
+config.json
+
 # Python cache
 __pycache__/
 *.pyc
