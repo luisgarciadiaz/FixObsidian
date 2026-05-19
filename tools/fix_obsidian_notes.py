@@ -44,6 +44,7 @@ BAD_PREFIXES = {"an", "el", "los", "la", "mi", "no", "lg", "m", "dune", "dragon"
                 "stephen", "charles", "patricia", "historia", "platon", "homero",
                 "isabel", "gabriel", "mao"}
 NUM_PREFIX_RE = re.compile(r"^\d{1,2}\s*-\s+")
+CHAPTER_PREFIX_RE = re.compile(r"^(\d{2}[A-Z]?)\s*-\s+(.+)$")
 EXTENSIONS_RE = re.compile(r'\.(pdf|epub|mobi|azw3|djvu|mp3|mp4|wma|wmv|avi|mkv|srt|vtt|zip|rar)$', re.IGNORECASE)
 
 
@@ -157,6 +158,9 @@ def strip_bad_prefix(raw):
             first, rest = raw.split(sep, 1)
             if first.strip().lower() in BAD_PREFIXES:
                 return rest.strip(), first.strip()
+    m = CHAPTER_PREFIX_RE.match(raw)
+    if m:
+        return m.group(2).strip(), m.group(1)
     return raw, None
 
 
@@ -186,6 +190,7 @@ def find_pdf_in_library(original_name, lib_index):
 def resolve_author_title(filepath, fm, body, existing_author, existing_title, lib_index, original_name):
     author = "Unknown Auto"
     title = ""
+    chapter = ""
     pdf_path = None
 
     file_uri = extract_file_uri(body)
@@ -215,13 +220,19 @@ def resolve_author_title(filepath, fm, body, existing_author, existing_title, li
     # Priority 3: parse from note filename
     if author == "Unknown Auto":
         note_fname = os.path.basename(filepath)
-        clean_raw, _ = strip_bad_prefix(note_fname)
+        clean_raw, prefix = strip_bad_prefix(note_fname)
+        if prefix and prefix.lower() not in BAD_PREFIXES:
+            chapter = prefix
         clean_raw = NUM_PREFIX_RE.sub("", clean_raw)
         f_author, f_title = parse_author_title_from_filename(clean_raw.replace(".md", ""))
         if f_author and f_author.lower() not in BAD_PREFIXES:
             author = normalize_author_name(f_author)
             if not title:
                 title = f_title
+        elif not chapter:
+            clean_raw2, prefix2 = strip_bad_prefix(note_fname.replace(".md", ""))
+            if prefix2:
+                chapter = prefix2
 
     # Title fallback: existing heading, then cleaned filename
     if not title:
@@ -239,7 +250,7 @@ def resolve_author_title(filepath, fm, body, existing_author, existing_title, li
     if cleaned != title:
         title = cleaned
     title = re.sub(r'^[-–—_.,;:\s]+', '', title).strip()
-    return author, title, file_uri
+    return author, title, file_uri, chapter
 
 
 def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
@@ -297,12 +308,14 @@ def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
         existing_title = extract_heading(body) or ""
         existing_series = fm.get("series", "")
         existing_volume = fm.get("volume", "")
+        existing_chapter = fm.get("chapter", "")
         original_name = extract_original_name(body) or ""
 
-        author, title, file_uri = resolve_author_title(
+        author, title, file_uri, chapter = resolve_author_title(
             filepath, fm, body, existing_author, existing_title,
             lib_index, original_name
         )
+        chapter = chapter or existing_chapter
 
         if author == "Unknown Auto" and not title:
             stats["skipped"] += 1
@@ -330,7 +343,8 @@ def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
         new_content = make_obsidian_content(
             author=author, title=title, category=existing_category,
             isbn=existing_isbn, original_name=original_name,
-            file_uri=file_uri, series=existing_series, volume=existing_volume
+            file_uri=file_uri, series=existing_series, volume=existing_volume,
+            chapter=chapter
         )
 
         if dry_run:

@@ -73,7 +73,7 @@ def find_subfolder(cat_name, subfolder_map=None):
                 return folder
     return None
 
-def make_obsidian_content(author, title, category, isbn, original_name, file_uri, version="v1.5.0", series="", volume=""):
+def make_obsidian_content(author, title, category, isbn, original_name, file_uri, version="v1.5.0", series="", volume="", chapter=""):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cat_slug = slugify_category(category)
     cat_tag = make_category_tag(category)
@@ -90,16 +90,20 @@ def make_obsidian_content(author, title, category, isbn, original_name, file_uri
     if series:
         vol = f" #{volume}" if volume else ""
         series_line = f"\n- **Series:** {series}{vol}"
+    chapter_line = ""
+    if chapter:
+        chapter_line = f"\n- **Chapter:** {chapter}"
 
     fm_series = f'\nseries: "{series}"' if series else ""
     fm_volume = f'\nvolume: "{volume}"' if volume else ""
+    fm_chapter = f'\nchapter: "{chapter}"' if chapter else ""
 
     content = f"""---
 title: "{title}"
 author: "[[{author}]]"
 category: {category}
 tags: [vortexy, {cat_slug}]
-isbn: "{isbn or ''}"{fm_series}{fm_volume}
+isbn: "{isbn or ''}"{fm_series}{fm_volume}{fm_chapter}
 date_organized: {timestamp}
 vortexy_version: {version}
 ---
@@ -107,7 +111,7 @@ vortexy_version: {version}
 # {title}
 
 - **Author:** [[{author}]]
-- **Category:** {cat_tag}{isbn_display}{series_line}
+- **Category:** {cat_tag}{isbn_display}{series_line}{chapter_line}
 - **Original Name:** `{original_name}`{file_link}
 
 ---

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v1.2.0 (2026-05-19)
+
+### Added
+- **Chapter prefix extraction** — Numeric/section prefixes (e.g., `04 -`, `03A -`) are now stripped from filenames and saved as `chapter` field in frontmatter
+- `chapter` field in frontmatter and body (displays as `- **Chapter:** 04`)
+
+### Fixed
+- Course/tutorial files with numeric prefixes (like `04 - 01-Basic FKIK switching theory.md`) now get proper `Author - Title` naming
+- `strip_bad_prefix()` now returns the prefix as chapter when no valid author is found
+
 ## v1.1.0 (2026-05-19)
 
 ### Added
