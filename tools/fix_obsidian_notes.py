@@ -70,6 +70,7 @@ def strip_author_prefix(text, author):
 def load_config():
     if not os.path.exists(CONFIG_PATH):
         print(f"Config file not found: {CONFIG_PATH}")
+        print("Copy config.json.example to config.json and edit the paths.")
         sys.exit(1)
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         cfg = json.load(f)
