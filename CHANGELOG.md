@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## v1.1.0 (2026-05-19)
+
+### Added
+- `AGENTS.md` — Expanded agent instructions with CLI usage, author resolution strategy, and statistics tracked
+- `README.md` — Improved documentation with quick start, feature list, subfolder category table, and CLI options reference
+
+### Changed
+- `tools/fix_obsidian_notes.py` — Added `--force` flag to rewrite notes even when filename is already correct
+- `core/vortexy_obsidian.py` — `create_obsidian_note()` now removes stale note with old author name before creating corrected note
+
+### Fixed
+- `tools/fix_obsidian_notes.py` — Author resolution now strips bad prefixes (`an`, `el`, `los`, `la`, `mi`, `no`, `lg`, `m`, `dune`, `dragon`, `stephen`, `charles`, `patricia`, `historia`, `platon`, `homero`, `isabel`, `gabriel`, `mao`)
+- `tools/fix_obsidian_notes.py` — Title now properly cleaned of redundant author prefix via `strip_author_prefix()`
+
 ## v1.0.0 (2026-05-18)
 
 Initial release of the FixObsidian toolset.
@@ -20,5 +34,5 @@ Initial release of the FixObsidian toolset.
   - Re-discovers file_uri by scanning PDF library path
   - Optional `--organize` flag to move notes into category subfolders
   - `--dry-run`, `--limit`, `--force` CLI flags
-- `agents.md` — Project instructions for AI-assisted development
+- `AGENTS.md` — Project instructions for AI-assisted development
 - `CHANGELOG.md` — This file

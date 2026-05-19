@@ -51,3 +51,36 @@ enable subfolder placement.
 - `G:\My Drive\07_Notes\AGENTS.md` — vault-wide instructions, tag taxonomy, subfolder structure, and history of the library cleanup effort.
 - The 16 genre subfolders (00 General Fiction–15 Media & Archive) exist but are **empty** — all 35K+ notes remain at root.
 - Category frontmatter in notes (`Fiction & Literature`, `Technical & Programming`, etc.) is often misclassified by the AI.
+
+## CLI Usage
+
+```powershell
+# Dry run — preview changes
+python tools/fix_obsidian_notes.py --dry-run
+
+# Process first 500 notes
+python tools/fix_obsidian_notes.py --limit 500
+
+# Process all notes and move into subfolders by category
+python tools/fix_obsidian_notes.py --organize
+
+# Override paths via CLI
+python tools/fix_obsidian_notes.py --vault "G:\Path\To\Vault" --library "D:\Library"
+```
+
+## Author Resolution Strategy
+
+The fixer resolves author/title from these sources (in priority order):
+1. PDF file URI in note body, then scanning the library
+2. Existing frontmatter `author` field
+3. Parsed from note filename
+
+Bad prefixes are stripped from filenames: `an`, `el`, `los`, `la`, `mi`, `no`, `lg`, `m`, `dune`, `dragon`, etc.
+
+## Statistics Tracked
+
+- **Fixed** — notes rewritten with corrected author/title/frontmatter
+- **Renamed** — notes whose filename was corrected
+- **Moved** — notes placed into category subfolders via `--organize`
+- **Skipped** — notes with no usable author/title
+- **Orphaned** — notes without the Vortexy footer (not processed)
