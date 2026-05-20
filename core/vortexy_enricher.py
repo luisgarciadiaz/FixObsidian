@@ -16,6 +16,7 @@ class MetadataEnricher:
         self.dry_run = dry_run
         self.cache_path = cache_path or DEFAULT_CACHE
         self._cache = {}
+        self._dirty = 0
         self._load_cache()
 
     def _load_cache(self):
@@ -29,6 +30,11 @@ class MetadataEnricher:
     def _save_cache(self):
         with open(self.cache_path, "w", encoding="utf-8") as f:
             json.dump(self._cache, f, indent=2, ensure_ascii=False)
+
+    def flush(self):
+        if self._dirty > 0:
+            self._save_cache()
+            self._dirty = 0
 
     def clear_cache(self):
         self._cache = {}
