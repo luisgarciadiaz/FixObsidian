@@ -145,13 +145,16 @@ class MetadataEnricher:
             if self._dirty % 50 == 0:
                 self._save_cache()
             return {}
-        wd = self._work(book.get("work_key", ""))
-        subjects = book.get("subjects", []) + wd.get("subjects", [])
+        subjects = book.get("subjects", [])
+        wd = {}
+        if book.get("work_key"):
+            wd = self._work(book["work_key"])
+            subjects = subjects + wd.get("subjects", [])
         result["publisher"] = book.get("publisher", "")
         result["publish_date"] = book.get("publish_date", "")
         result["synopsis"] = wd.get("synopsis", "")
         result["suggested_category"] = self._map_subjects(subjects) or ""
-        time.sleep(0.25)
+        time.sleep(0.05)
         self._cache[key] = result
         self._dirty += 1
         if self._dirty % 50 == 0:

@@ -9,13 +9,9 @@ import os
 import sys
 import time
 import argparse
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -129,7 +125,7 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
                 continue
 
             enriched = {}
-            if enricher:
+            if enricher and (existing_isbn or author != "Unknown Author"):
                 enriched = enricher.enrich(existing_isbn, title, author, year=bracket_year)
 
             correct_name = sanitize_filename(title if title.lower().startswith(author.lower()) else f"{author} - {title}")
@@ -137,19 +133,20 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
 
             target_subfolder = None
             if organize:
+                valid_folders = set(subfolder_map.keys())
                 author_key = author.lower().strip()
                 db_subfolder = author_genre_map.get(author_key)
                 enrich_sf = enriched.get("suggested_category", "")
 
-                if db_subfolder and db_subfolder != "00 General Fiction":
+                if db_subfolder and db_subfolder != "00 General Fiction" and db_subfolder in valid_folders:
                     target_subfolder = db_subfolder
-                elif enrich_sf and enrich_sf != "00 General Fiction":
+                elif enrich_sf and enrich_sf != "00 General Fiction" and enrich_sf in valid_folders:
                     target_subfolder = enrich_sf
                 else:
                     genre_sf = find_subfolder(title, subfolder_map)
                     if genre_sf and genre_sf != "00 General Fiction":
                         target_subfolder = genre_sf
-                    elif db_subfolder:
+                    elif db_subfolder and db_subfolder in valid_folders:
                         target_subfolder = db_subfolder
                     else:
                         sf = find_subfolder(existing_category, subfolder_map)

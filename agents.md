@@ -24,7 +24,6 @@ content.
 - `data/library_index.pkl` — Pickled library index for fast re-scans
 - `data/author_genre_map.json` — Local JSON fallback when Postgres is unavailable
 - `docs/` — User guide, developer reference, troubleshooting, and architecture docs
-- `.env.example` — Template for `.env` (copy to `.env` and edit)
 
 ## Vault Location
 
@@ -45,14 +44,10 @@ content.
 
 ## Configuration
 
-Configuration is loaded in this order (later overrides earlier):
-1. `config.json` — All settings (paths, subfolder map, options)
-2. `.env` — Optional env file for path overrides (requires `pip install python-dotenv`)
-3. CLI flags (`--vault`, `--library`, `--organize`, `--dry-run`, etc.)
+Configuration is loaded from `config.json`. CLI flags override config settings.
 
 ### Files
 - `config.json` — Main config. Edit vault_path, library_path, subfolder_map, etc.
-- `.env.example` — Template for `.env` (copy to `.env` and edit)
 
 ### Subfolder map
 The `subfolder_map` in `config.json` maps category keywords to genre subfolder names.
