@@ -27,7 +27,7 @@ from core.vortexy_obsidian import (
     sanitize_filename, make_obsidian_content, find_subfolder, DEFAULT_SUBFOLDER_MAP
 )
 from core.vortexy_parsers import (
-    parse_frontmatter, extract_heading, extract_original_name, extract_series, is_vortexy_note
+    parse_frontmatter, extract_heading, extract_original_name, extract_series
 )
 from core.vortexy_library import build_library_index
 from core.vortexy_resolver import resolve_author_title
@@ -87,7 +87,7 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
     print(f"Mode: {'DRY RUN' if dry_run else 'LIVE'} | Organize: {'ON' if organize else 'OFF'} | Total: {total} notes in {batch_count} batches of {BATCH}")
     print()
 
-    stats = {"fixed": 0, "renamed": 0, "moved": 0, "skipped": 0, "orphaned": 0, "created": 0}
+    stats = {"fixed": 0, "renamed": 0, "moved": 0, "skipped": 0, "created": 0}
 
     for batch_idx in range(batch_count):
         batch_items = all_items[batch_idx * BATCH : (batch_idx + 1) * BATCH]
@@ -108,10 +108,6 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
                 stats["skipped"] += 1
                 continue
 
-            if not is_vortexy_note(text):
-                stats["orphaned"] += 1
-                continue
-
             fm, body = parse_frontmatter(text)
             existing_author = fm.get("author", "").strip("[]").strip()
             existing_category = fm.get("category", "Uncategorized")
@@ -122,19 +118,19 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
             existing_chapter = fm.get("chapter", "")
             original_name = extract_original_name(body) or ""
 
-            author, title, file_uri, chapter = resolve_author_title(
+            author, title, file_uri, chapter, bracket_year = resolve_author_title(
                 filepath, fm, body, existing_author, existing_title,
                 lib_index, original_name
             )
             chapter = chapter or existing_chapter
 
-            if author == "Unknown Auto" and not title:
+            if author == "Unknown Author" and not title:
                 stats["skipped"] += 1
                 continue
 
             enriched = {}
             if enricher:
-                enriched = enricher.enrich(existing_isbn, title, author)
+                enriched = enricher.enrich(existing_isbn, title, author, year=bracket_year)
 
             correct_name = sanitize_filename(title if title.lower().startswith(author.lower()) else f"{author} - {title}")
             correct_filename = f"{correct_name}.md"
@@ -169,7 +165,7 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
 
             use_category = enriched.get("suggested_category") or existing_category
             publisher = enriched.get("publisher", "")
-            publish_date = enriched.get("publish_date", "")
+            publish_date = enriched.get("publish_date", "") or bracket_year or ""
             synopsis = enriched.get("synopsis", "")
 
             new_content = make_obsidian_content(
@@ -187,8 +183,8 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
                     sub_info = f" [{target_subfolder}/]" if target_subfolder else ""
                     msg += f"\n          -> {sub_info}{correct_filename}"
                 msg += " (rewrite content)"
-                if author == "Unknown Auto":
-                    msg += " [author: Unknown Auto]"
+                if author == "Unknown Author":
+                    msg += " [author: Unknown Author]"
                 print(msg)
                 stats["fixed"] += 1
                 batch_fixed += 1
@@ -221,7 +217,7 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
                 print(f"  [{global_idx}] [!] Error writing {correct_filename}: {e}")
                 stats["skipped"] += 1
 
-        print(f"  Batch {batch_idx+1}/{batch_count} ({b_start}-{b_end}): {batch_fixed} fixed, {(time.time()-t_batch):.1f}s, running total: {stats['fixed']} fixed, {stats['orphaned']} orphaned")
+        print(f"  Batch {batch_idx+1}/{batch_count} ({b_start}-{b_end}): {batch_fixed} fixed, {(time.time()-t_batch):.1f}s, running total: {stats['fixed']} fixed")
 
     if enricher:
         enricher.flush()
@@ -232,7 +228,6 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
     print(f"  Moved:     {stats['moved']}")
     print(f"  Created:   {stats['created']}")
     print(f"  Skipped:   {stats['skipped']}")
-    print(f"  Orphaned:  {stats['orphaned']} (non-Vortexy notes)")
     print(f"  Total time: {(time.time()-t0):.1f}s")
     print("=" * 50)
 

@@ -21,7 +21,7 @@ def _norm_compare(s):
 
 
 def strip_author_prefix(text, author):
-    if not text or not author or author in ("Unknown Auto", "Unknown"):
+    if not text or not author or author in ("Unknown Author", "Unknown"):
         return text
     norm_author = _norm_compare(author)
     for sep in [' - ', ' \u2013 ', ' \u2014 ', ' _ ']:
@@ -87,7 +87,7 @@ def strip_curly_hash(raw):
 
 
 def resolve_author_title(filepath, fm, body, existing_author, existing_title, lib_index, original_name):
-    author = "Unknown Auto"
+    author = "Unknown Author"
     title = ""
     chapter = ""
     year = None
@@ -112,12 +112,12 @@ def resolve_author_title(filepath, fm, body, existing_author, existing_title, li
         else:
             title = os.path.splitext(pdf_fname)[0]
 
-    if author == "Unknown Auto" and existing_author:
+    if author == "Unknown Author" and existing_author:
         ex = existing_author.strip().lower()
         if ex and ex not in ("unknown", "desconocido", "") and ex not in BAD_PREFIXES:
             author = normalize_author_name(existing_author)
 
-    if author == "Unknown Auto":
+    if author == "Unknown Author":
         note_fname = os.path.basename(filepath)
         clean_raw, prefix = strip_bad_prefix(note_fname)
         if prefix and prefix.lower() not in BAD_PREFIXES:

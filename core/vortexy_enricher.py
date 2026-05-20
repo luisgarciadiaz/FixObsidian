@@ -124,8 +124,8 @@ class MetadataEnricher:
                         best = folder
         return best
 
-    def enrich(self, isbn, title, author):
-        key = self._cache_key(isbn, title, author)
+    def enrich(self, isbn, title, author, year=None):
+        key = self._cache_key(isbn, title, author, year)
         if key in self._cache:
             return self._cache[key]
         if self.dry_run:

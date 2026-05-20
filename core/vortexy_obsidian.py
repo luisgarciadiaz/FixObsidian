@@ -12,7 +12,7 @@ def sanitize_filename(name):
 
 def normalize_author_name(name):
     if not name or name.lower() in ("unknown", "desconocido", "unknown auto"):
-        return "Unknown Auto"
+        return "Unknown Author"
     delimiters = r" & | and |;"
     sub_authors = re.split(delimiters, name.strip())
     healed_parts = []
@@ -140,7 +140,7 @@ def create_obsidian_note(config, meta, skip_if_exists=True, note_index=None, tar
     if filename.lower().endswith(skip_exts):
         return {"status": "exists"}
     author_raw = meta.get("author") or "Unknown Auto"
-    if author_raw in ("Unknown", "Unknown Auto"):
+    if author_raw in ("Unknown", "Unknown Auto", "Unknown Author"):
         return {"status": "exists"}
     if not os.path.exists(vault_path):
         try:

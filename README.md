@@ -91,7 +91,6 @@ The fixer prints a summary at the end:
   Moved:     12
   Created:   0
   Skipped:   5
-  Orphaned:  2340 (non-Vortexy notes)
   Total time: 123.4s
 ==================================================
 ```
