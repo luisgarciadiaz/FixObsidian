@@ -3,6 +3,8 @@
 
   "vault_path": "G:\\My Drive\\07_Notes\\3. Resources\\Library",
   "library_path": "D:\\02 Library",
+  "threads": 2,
+  "verbose": true,
 
   "unknown_author_fallback": "Unknown Author",
   "update_orphan_notes": true,

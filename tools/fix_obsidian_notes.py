@@ -80,100 +80,101 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
     BATCH = 100
     total = len(all_items)
     batch_count = (total + BATCH - 1) // BATCH
-    print(f"Mode: {'DRY RUN' if dry_run else 'LIVE'} | Organize: {'ON' if organize else 'OFF'} | Total: {total} notes in {batch_count} batches of {BATCH}")
+    workers = cfg.get("threads", 2)
+    verbose = cfg.get("verbose", True)
+    print(f"Mode: {'DRY RUN' if dry_run else 'LIVE'} | Organize: {'ON' if organize else 'OFF'} | Threads: {workers} | Verbose: {'ON' if verbose else 'OFF'} | Total: {total} notes in {batch_count} batches of {BATCH}")
     print()
 
     stats = {"fixed": 0, "renamed": 0, "moved": 0, "skipped": 0, "created": 0}
+    stats_lock = threading.Lock()
+    enrich_lock = threading.Lock()
+    print_lock = threading.Lock()
+    valid_folders = set(subfolder_map.keys()) if organize else set()
 
-    for batch_idx in range(batch_count):
-        batch_items = all_items[batch_idx * BATCH : (batch_idx + 1) * BATCH]
-        b_start = batch_idx * BATCH + 1 + (start_at or 0)
-        b_end = b_start + len(batch_items) - 1
-        t_batch = time.time()
-        batch_fixed = 0
-
-        for idx, fname in enumerate(batch_items):
-            filepath = os.path.join(vault_path, fname)
-            global_idx = batch_idx * BATCH + idx + 1
-
-            try:
-                with open(filepath, "r", encoding="utf-8", errors="replace") as f:
-                    text = f.read()
-            except Exception as e:
+    def process_one(global_idx, fname):
+        filepath = os.path.join(vault_path, fname)
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+                text = f.read()
+        except Exception as e:
+            with print_lock:
                 print(f"  [{global_idx}] [!] Error reading {fname}: {e}")
+            with stats_lock:
                 stats["skipped"] += 1
-                continue
+            return
 
-            fm, body = parse_frontmatter(text)
-            existing_author = fm.get("author", "").strip("[]").strip()
-            existing_category = fm.get("category", "Uncategorized")
-            existing_isbn = fm.get("isbn", "")
-            existing_title = extract_heading(body) or ""
-            existing_series = fm.get("series", "")
-            existing_volume = fm.get("volume", "")
-            existing_chapter = fm.get("chapter", "")
-            original_name = extract_original_name(body) or ""
+        fm, body = parse_frontmatter(text)
+        existing_author = fm.get("author", "").strip("[]").strip()
+        existing_category = fm.get("category", "Uncategorized")
+        existing_isbn = fm.get("isbn", "")
+        existing_title = extract_heading(body) or ""
+        existing_series = fm.get("series", "")
+        existing_volume = fm.get("volume", "")
+        existing_chapter = fm.get("chapter", "")
+        original_name = extract_original_name(body) or ""
 
-            author, title, file_uri, chapter, bracket_year = resolve_author_title(
-                filepath, fm, body, existing_author, existing_title,
-                lib_index, original_name
-            )
-            chapter = chapter or existing_chapter
+        author, title, file_uri, chapter, bracket_year = resolve_author_title(
+            filepath, fm, body, existing_author, existing_title,
+            lib_index, original_name
+        )
+        chapter = chapter or existing_chapter
 
-            if author == "Unknown Author" and not title:
+        if author == "Unknown Author" and not title:
+            with stats_lock:
                 stats["skipped"] += 1
-                continue
+            return
 
-            enriched = {}
-            if enricher and (existing_isbn or author != "Unknown Author"):
+        enriched = {}
+        if enricher and (existing_isbn or author != "Unknown Author"):
+            with enrich_lock:
                 enriched = enricher.enrich(existing_isbn, title, author, year=bracket_year)
 
-            correct_name = sanitize_filename(title if title.lower().startswith(author.lower()) else f"{author} - {title}")
-            correct_filename = f"{correct_name}.md"
+        correct_name = sanitize_filename(title if title.lower().startswith(author.lower()) else f"{author} - {title}")
+        correct_filename = f"{correct_name}.md"
 
-            target_subfolder = None
-            if organize:
-                valid_folders = set(subfolder_map.keys())
-                author_key = author.lower().strip()
-                db_subfolder = author_genre_map.get(author_key)
-                enrich_sf = enriched.get("suggested_category", "")
+        target_subfolder = None
+        if organize:
+            author_key = author.lower().strip()
+            db_subfolder = author_genre_map.get(author_key)
+            enrich_sf = enriched.get("suggested_category", "")
 
-                if db_subfolder and db_subfolder != "00 General Fiction" and db_subfolder in valid_folders:
+            if db_subfolder and db_subfolder != "00 General Fiction" and db_subfolder in valid_folders:
+                target_subfolder = db_subfolder
+            elif enrich_sf and enrich_sf != "00 General Fiction" and enrich_sf in valid_folders:
+                target_subfolder = enrich_sf
+            else:
+                genre_sf = find_subfolder(title, subfolder_map)
+                if genre_sf and genre_sf != "00 General Fiction":
+                    target_subfolder = genre_sf
+                elif db_subfolder and db_subfolder in valid_folders:
                     target_subfolder = db_subfolder
-                elif enrich_sf and enrich_sf != "00 General Fiction" and enrich_sf in valid_folders:
-                    target_subfolder = enrich_sf
                 else:
-                    genre_sf = find_subfolder(title, subfolder_map)
-                    if genre_sf and genre_sf != "00 General Fiction":
-                        target_subfolder = genre_sf
-                    elif db_subfolder and db_subfolder in valid_folders:
-                        target_subfolder = db_subfolder
-                    else:
-                        sf = find_subfolder(existing_category, subfolder_map)
-                        if sf:
-                            target_subfolder = sf
+                    sf = find_subfolder(existing_category, subfolder_map)
+                    if sf:
+                        target_subfolder = sf
 
-            target_dir = vault_path
-            if target_subfolder:
-                target_dir = os.path.join(vault_path, target_subfolder)
-            target_path = os.path.join(target_dir, correct_filename)
+        target_dir = vault_path
+        if target_subfolder:
+            target_dir = os.path.join(vault_path, target_subfolder)
+        target_path = os.path.join(target_dir, correct_filename)
 
-            needs_rename = (os.path.normpath(filepath) != os.path.normpath(target_path))
+        needs_rename = (os.path.normpath(filepath) != os.path.normpath(target_path))
 
-            use_category = enriched.get("suggested_category") or existing_category
-            publisher = enriched.get("publisher", "")
-            publish_date = enriched.get("publish_date", "") or bracket_year or ""
-            synopsis = enriched.get("synopsis", "")
+        use_category = enriched.get("suggested_category") or existing_category
+        publisher = enriched.get("publisher", "")
+        publish_date = enriched.get("publish_date", "") or bracket_year or ""
+        synopsis = enriched.get("synopsis", "")
 
-            new_content = make_obsidian_content(
-                author=author, title=title, category=use_category,
-                isbn=existing_isbn, original_name=original_name,
-                file_uri=file_uri, series=existing_series, volume=existing_volume,
-                chapter=chapter, publisher=publisher, publish_date=publish_date,
-                synopsis=synopsis
-            )
+        new_content = make_obsidian_content(
+            author=author, title=title, category=use_category,
+            isbn=existing_isbn, original_name=original_name,
+            file_uri=file_uri, series=existing_series, volume=existing_volume,
+            chapter=chapter, publisher=publisher, publish_date=publish_date,
+            synopsis=synopsis
+        )
 
-            if dry_run:
+        if dry_run:
+            if verbose:
                 ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
                 msg = f"  {ts} [{global_idx}] {fname}"
                 if needs_rename:
@@ -182,38 +183,66 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
                 msg += " (rewrite content)"
                 if author == "Unknown Author":
                     msg += " [author: Unknown Author]"
-                print(msg)
+                with print_lock:
+                    print(msg)
+            with stats_lock:
                 stats["fixed"] += 1
-                batch_fixed += 1
-                continue
+            return
 
-            try:
-                if target_subfolder:
-                    os.makedirs(target_dir, exist_ok=True)
+        try:
+            if target_subfolder:
+                os.makedirs(target_dir, exist_ok=True)
 
-                with open(target_path, "w", encoding="utf-8") as f:
-                    f.write(new_content)
+            with open(target_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
 
-                if needs_rename and os.path.normpath(filepath) != os.path.normpath(target_path):
-                    if os.path.exists(filepath):
-                        os.remove(filepath)
+            if needs_rename and os.path.normpath(filepath) != os.path.normpath(target_path):
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                with stats_lock:
                     stats["renamed"] += 1
+                if verbose:
                     sub_info = f" [{target_subfolder}/]" if target_subfolder else ""
                     ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
-                    print(f"  {ts} [{global_idx}] {fname} ->{sub_info}{correct_filename}")
-                else:
+                    with print_lock:
+                        print(f"  {ts} [{global_idx}] {fname} ->{sub_info}{correct_filename}")
+            else:
+                if verbose:
                     ts = datetime.now().strftime('%H:%M:%S.%f')[:-3]
-                    print(f"  {ts} [{global_idx}] {fname} (rewritten)")
+                    with print_lock:
+                        print(f"  {ts} [{global_idx}] {fname} (rewritten)")
 
+            with stats_lock:
                 stats["fixed"] += 1
-                batch_fixed += 1
                 if target_subfolder and os.path.dirname(filepath) != target_dir:
                     stats["moved"] += 1
 
-            except Exception as e:
+        except Exception as e:
+            with print_lock:
                 print(f"  [{global_idx}] [!] Error writing {correct_filename}: {e}")
+            with stats_lock:
                 stats["skipped"] += 1
 
+    for batch_idx in range(batch_count):
+        batch_items = all_items[batch_idx * BATCH : (batch_idx + 1) * BATCH]
+        b_start = batch_idx * BATCH + 1 + (start_at or 0)
+        b_end = b_start + len(batch_items) - 1
+        t_batch = time.time()
+        before_fixed = stats["fixed"]
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(process_one, batch_idx * BATCH + idx + 1, fname): fname
+                for idx, fname in enumerate(batch_items)
+            }
+            for f in as_completed(futures):
+                try:
+                    f.result()
+                except Exception as e:
+                    with print_lock:
+                        print(f"  [!] Thread error on {futures[f]}: {e}")
+
+        batch_fixed = stats["fixed"] - before_fixed
         print(f"  Batch {batch_idx+1}/{batch_count} ({b_start}-{b_end}): {batch_fixed} fixed, {(time.time()-t_batch):.1f}s, running total: {stats['fixed']} fixed")
 
     if enricher:
