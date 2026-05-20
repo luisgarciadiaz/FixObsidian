@@ -7,7 +7,7 @@ from core.vortexy_parsers import extract_file_uri
 BAD_PREFIXES = {"an", "el", "los", "la", "mi", "no", "lg", "m", "dune", "dragon",
                 "stephen", "charles", "patricia", "historia", "platon", "homero",
                 "isabel", "gabriel", "mao"}
-NUM_PREFIX_RE = re.compile(r"^\d{1,2}\s*-\s+")
+NUM_PREFIX_RE = re.compile(r"^\d{1,2}\s*[- ]\s*")
 CHAPTER_PREFIX_RE = re.compile(r"^(\d{2}[A-Z]?)\s*-\s+(.+)$")
 EXTENSIONS_RE = re.compile(r'\.(pdf|epub|mobi|azw3|djvu|mp3|mp4|wma|wmv|avi|mkv|srt|vtt|zip|rar)$', re.IGNORECASE)
 

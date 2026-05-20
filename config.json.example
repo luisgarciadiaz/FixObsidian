@@ -24,7 +24,7 @@
     "11 Philosophy": ["philosophy", "filosofia", "ethics", "logic", "pensamiento", "wisdom"],
     "12 Business & Economics": ["business", "economics", "economia", "management", "finance", "marketing", "entrepreneur"],
     "13 Science & Technology": ["science", "technology", "tecnologia", "physics", "chemistry", "biology", "math"],
-    "14 Graphic & Literary Arts": ["graphic", "literary arts", "arte", "comic", "graphic novel", "poetry", "poesia"],
+    "14 Graphic & Literary Arts": ["graphic", "literary arts", "arte", "comic", "graphic novel", "poetry", "poesia", "poem", "sonnet", "verse", "drama", "play", "theatre", "theater"],
     "15 Media & Archive": ["media", "archive", "reference", "reference", "diccionario", "encyclopedia"]
   },
 

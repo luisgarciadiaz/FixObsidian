@@ -7,6 +7,7 @@ genre routing. Falls back to title/category keyword matching.
 
 import os
 import sys
+import time
 import argparse
 
 try:
@@ -38,7 +39,14 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
         print(f"Vault path not found: {vault_path}")
         sys.exit(1)
 
-    all_items = sorted(f for f in os.listdir(vault_path) if f.endswith(".md") and not os.path.isdir(os.path.join(vault_path, f)))
+    if limit or start_at:
+        import itertools
+        md_entries = (e.name for e in os.scandir(vault_path) if e.name.endswith(".md") and not e.is_dir())
+        if start_at:
+            md_entries = itertools.islice(md_entries, start_at, None)
+        all_items = sorted(itertools.islice(md_entries, limit or None))
+    else:
+        all_items = sorted(f for f in os.listdir(vault_path) if f.endswith(".md") and not os.path.isdir(os.path.join(vault_path, f)))
     if not all_items:
         print("No .md files found in vault.")
         return
@@ -70,12 +78,8 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
 
     total = len(all_items)
     print(f"Found {total} .md files in vault.")
-    if start_at:
-        all_items = all_items[start_at:]
-    if limit:
-        all_items = all_items[:limit]
     if start_at or limit:
-        start_msg = f"notes {start_at or 0}+" if start_at else f"first {limit}"
+        start_msg = f"notes {start_at}+" if start_at else f"first {limit}"
         print(f"Processing {start_msg}...")
 
     print(f"Mode: {'DRY RUN (no changes)' if dry_run else 'LIVE'}")
