@@ -11,6 +11,12 @@ content.
 
 - `tools/fix_obsidian_notes.py` — Main fixer script (standalone, no DB needed)
 - `core/vortexy_obsidian.py` — Note template and helpers (shared with Sorter)
+- `core/vortexy_config.py` — Config loading
+- `core/vortexy_library.py` — PDF library index and search
+- `core/vortexy_resolver.py` — Author/title resolution from filenames/PDFs
+- `core/vortexy_db.py` — Postgres author_genre_map loader
+- `tools/enrich_author_genres.py` — OpenLibrary API author genre classification
+- `tools/extract_authors.py` — Extract unique authors from vault for manual mapping
 - `config.json` — All settings (paths, subfolder map, options)
 - `.env.example` — Template for `.env` (copy to `.env` and edit)
 
@@ -29,6 +35,8 @@ content.
 - The fix script is standalone — it should never require `sorter_metadata.sqlite` to function.
 - When editing the note template in `core/vortexy_obsidian.py`, consider backwards
   compatibility with existing notes in the vault.
+- **Python files must not exceed 200 lines.** If a file approaches 200 lines, split it
+  into focused single-responsibility modules under `core/`.
 
 ## Configuration
 
@@ -58,8 +66,11 @@ enable subfolder placement.
 # Dry run — preview changes
 python tools/fix_obsidian_notes.py --dry-run
 
-# Process first 500 notes
-python tools/fix_obsidian_notes.py --limit 500
+# Run dry-run with Open Library metadata enrichment
+python tools/fix_obsidian_notes.py --enrich --dry-run
+
+# Process and enrich first 100 notes
+python tools/fix_obsidian_notes.py --limit 100 --enrich
 
 # Process all notes and move into subfolders by category
 python tools/fix_obsidian_notes.py --organize
@@ -67,6 +78,7 @@ python tools/fix_obsidian_notes.py --organize
 # Override paths via CLI
 python tools/fix_obsidian_notes.py --vault "G:\Path\To\Vault" --library "D:\Library"
 ```
+
 
 ## Author Resolution Strategy
 
@@ -76,6 +88,68 @@ The fixer resolves author/title from these sources (in priority order):
 3. Parsed from note filename
 
 Bad prefixes are stripped from filenames: `an`, `el`, `los`, `la`, `mi`, `no`, `lg`, `m`, `dune`, `dragon`, etc.
+
+## Author Genre Mapping (Postgres)
+
+The `author_genre_map` table in the Sorter Postgres DB maps normalized author names to
+vault subfolder names. Populated by `tools/enrich_author_genres.py` using the OpenLibrary
+API. The fixer queries this table at startup and uses it as the highest-priority source
+for subfolder routing.
+
+- **Schema:** `author_name TEXT PRIMARY KEY, subfolder TEXT NOT NULL`
+- **Seeded from:** Sorter `authors` + `processed_files` tables (dest_path majority vote)
+- **Enriched via:** OpenLibrary Search API (`subject_facet` with comma-split matching)
+- **Priority:** Author map > Title keyword match > Category keyword match
+- Use `tools/enrich_author_genres.py --skip N` to resume interrupted enrichment.
+
+## Genre Routing Priority (in fix_notes)
+
+1. `author_genre_map` Postgres lookup (if not `00 General Fiction`)
+2. Title body keyword match against `subfolder_map` (genre-specific folders only)
+3. `author_genre_map` fallback (even if `00 General Fiction`)
+4. Category frontmatter keyword match against `subfolder_map`
+
+## Metadata Enrichment Strategy (ISBN & Open Library)
+
+When the `--enrich` flag is enabled (or `isbn_enrichment` is `true` in `config.json`), the fixer attempts to fetch rich book details from the free public **Open Library API** using:
+1. **ISBN Lookup:** Querying by note's frontmatter `isbn`.
+2. **Search Lookup Fallback:** Querying by ISBN via full-text search.
+3. **Title/Author Fallback:** Querying by resolved title and normalized author name if ISBN lookup yields no results.
+4. **Work Lookup:** Querying `/works/OLxxxxxW` to fetch a rich synopsis and subject genres.
+
+### Genre/Category Auto-Correction
+Subject genres retrieved from the API are cross-referenced with keywords in the `subfolder_map` (defined in `config.json`) to automatically re-classify and assign the note to the correct genre subfolder, fixing AI misclassifications (e.g., correcting *Gateway* from `Technical & Programming` to `Science Fiction`).
+
+### Performance & Caching
+To prevent duplicate requests and stay rate-limit friendly, all API responses are cached in `data/metadata_cache.json`.
+- Dry-runs will read from the cache but will **not** query live APIs.
+- Use `--clear-cache` to force refetching.
+
+## ISBN and Book Metadata Enrichment (Implemented)
+
+The enrichment feature fetches book metadata from the free public **Open Library API**:
+- **Publisher**, **publish date**, and **synopsis** added to note frontmatter/body.
+- **Auto-corrected genre subfolder routing** based on API subjects.
+- **Cache layer** (`data/metadata_cache.json`) prevents repeated API calls.
+- **CLI flags:** `--enrich` (live API), `--clear-cache` (clear cache).
+
+### API Pipeline (`core/vortexy_enricher.py`)
+1. **ISBN Lookup:** `/api/books?bibkeys=ISBN:{isbn}`
+2. **Search Fallback:** `/search.json?isbn={isbn}`
+3. **Title/Author Search:** `/search.json?title=...&author=...`
+4. **Work Lookup:** `/works/OLxxxxxW.json` (synopsis + subjects)
+
+### Genre Routing Priority (updated)
+1. `author_genre_map` Postgres lookup (if not `00 General Fiction`)
+2. **Enrichment suggested category** (from Open Library subjects)
+3. Title body keyword match against `subfolder_map`
+4. `author_genre_map` fallback
+5. Category frontmatter keyword match
+
+### Documentation
+- `docs/user_guide_enrichment.md` — User manual and CLI examples
+- `docs/developer_reference.md` — API pipeline and extension guide
+- `docs/troubleshooting.md` — Rate limiting, cache, incorrect mappings
 
 ## Statistics Tracked
 

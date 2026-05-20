@@ -20,7 +20,7 @@
     "07 Biography & Autobiography": ["biography", "autobiography", "biografia", "memoir", "vida"],
     "08 Memoir & Self-Help": ["self-help", "autoayuda", "memoir", "personal development", "superacion"],
     "09 History": ["history", "historia", "ancient", "medieval", "war", "guerra", "civilization"],
-    "10 Technical & Programming": ["technical", "programming", "programacion", "computer", "software", "code", "engineering", "technology"],
+    "10 Technical & Programming": ["technical", "programming", "programacion", "computer", "software", "code", "engineering", "technology", "training", "education"],
     "11 Philosophy": ["philosophy", "filosofia", "ethics", "logic", "pensamiento", "wisdom"],
     "12 Business & Economics": ["business", "economics", "economia", "management", "finance", "marketing", "entrepreneur"],
     "13 Science & Technology": ["science", "technology", "tecnologia", "physics", "chemistry", "biology", "math"],
@@ -29,6 +29,15 @@
   },
 
   "isbn_enrichment": true,
+  "enrichment_cache_path": "data/metadata_cache.json",
+
+  "db_config": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "postgres",
+    "password": "",
+    "dbname": "app_db"
+  },
 
   "_notes": {
     "vault_path": "Full path to your Obsidian vault containing the notes.",
@@ -36,8 +45,10 @@
     "unknown_author_fallback": "Name to use when author cannot be determined.",
     "update_orphan_notes": "If true, update notes even when the PDF file no longer exists on disk.",
     "strategy": "'edit' = modify notes in-place; 'recreate' = delete + recreate (not recommended without DB).",
-    "organize": "If true, move notes into subfolders by category (requires subfolder_map).",
-    "subfolder_map": "Maps category keywords to vault subfolder names. Add/remove entries as needed.",
-    "isbn_enrichment": "If true, add clickable Open Library links for ISBNs."
+    "organize": "If true, move notes into subfolders by category/author_genre_map.",
+    "subfolder_map": "Maps category keywords to vault subfolder names.",
+    "isbn_enrichment": "If true, fetch book metadata (publisher, synopsis, category) from Open Library API.",
+    "enrichment_cache_path": "Path to JSON cache file for Open Library API responses.",
+    "db_config": "PostgreSQL connection to Sorter DB for author_genre_map lookup."
   }
 }

@@ -1,24 +1,13 @@
 #!/usr/bin/env python3
-"""
-Fix Obsidian MD Notes — standalone tool to repair and improve Vortexy-generated
-Obsidian markdown notes. No SQLite dependency. Works by scanning the vault and
-parsing existing note content + PDF filenames.
+"""Fix Obsidian MD Notes — repair and improve Vortexy-generated markdown notes.
 
-Usage:
-    python fix_obsidian_notes.py                     # fix everything
-    python fix_obsidian_notes.py --dry-run            # preview only
-    python fix_obsidian_notes.py --limit 100          # first 100 notes
-    python fix_obsidian_notes.py --organize           # move notes into subfolders
-    python fix_obsidian_notes.py --vault "G:\\...\\Library"
+Uses Postgres author_genre_map (enriched by tools/enrich_author_genres.py) for
+genre routing. Falls back to title/category keyword matching.
 """
 
 import os
-import re
 import sys
-import json
 import argparse
-import urllib.parse
-from datetime import datetime
 
 try:
     from dotenv import load_dotenv
@@ -31,229 +20,20 @@ sys.stdout.reconfigure(encoding='utf-8')
 CORE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, CORE_DIR)
 
+from core.vortexy_config import load_config
 from core.vortexy_obsidian import (
-    sanitize_filename, normalize_author_name, slugify_category,
-    make_category_tag, make_obsidian_content, find_subfolder,
-    DEFAULT_SUBFOLDER_MAP
+    sanitize_filename, make_obsidian_content, find_subfolder, DEFAULT_SUBFOLDER_MAP
 )
-
-CONFIG_PATH = os.path.join(CORE_DIR, "config.json")
-
-# Known bogus first-name / prefix tokens from path-parsing heuristics
-BAD_PREFIXES = {"an", "el", "los", "la", "mi", "no", "lg", "m", "dune", "dragon",
-                "stephen", "charles", "patricia", "historia", "platon", "homero",
-                "isabel", "gabriel", "mao"}
-NUM_PREFIX_RE = re.compile(r"^\d{1,2}\s*-\s+")
-CHAPTER_PREFIX_RE = re.compile(r"^(\d{2}[A-Z]?)\s*-\s+(.+)$")
-EXTENSIONS_RE = re.compile(r'\.(pdf|epub|mobi|azw3|djvu|mp3|mp4|wma|wmv|avi|mkv|srt|vtt|zip|rar)$', re.IGNORECASE)
+from core.vortexy_parsers import (
+    parse_frontmatter, extract_heading, extract_original_name, extract_series, is_vortexy_note
+)
+from core.vortexy_library import build_library_index
+from core.vortexy_resolver import resolve_author_title
+from core.vortexy_db import load_author_genre_map
+from core.vortexy_enricher import MetadataEnricher
 
 
-def _norm_compare(s):
-    return re.sub(r'[.\s]+', '', s).lower()
-
-
-def strip_author_prefix(text, author):
-    if not text or not author or author in ("Unknown Auto", "Unknown"):
-        return text
-    norm_author = _norm_compare(author)
-    for sep in [' - ', ' – ', ' — ', ' _ ']:
-        if sep in text:
-            prefix, rest = text.split(sep, 1)
-            if _norm_compare(prefix) == norm_author:
-                return rest.strip()
-    if _norm_compare(text).startswith(norm_author):
-        rest = text[len(author):].strip().lstrip('-–—_ ').strip()
-        if rest:
-            return rest
-    return text
-
-
-def load_config():
-    if not os.path.exists(CONFIG_PATH):
-        print(f"Config file not found: {CONFIG_PATH}")
-        print("Copy config.json.example to config.json and edit the paths.")
-        sys.exit(1)
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        cfg = json.load(f)
-    cfg.pop("_description", None)
-    cfg.pop("_notes", None)
-
-    env_vault = os.environ.get("VAULT_PATH")
-    env_library = os.environ.get("LIBRARY_PATH")
-    env_organize = os.environ.get("ORGANIZE_NOTES")
-    if env_vault:
-        cfg["vault_path"] = env_vault
-    if env_library:
-        cfg["library_path"] = env_library
-    if env_organize and env_organize.lower() in ("true", "1", "yes"):
-        cfg["organize"] = True
-
-    return cfg
-
-
-def parse_frontmatter(text):
-    if not text.startswith("---"):
-        return {}, text
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return {}, text
-    raw = parts[1]
-    body = parts[2]
-    fm = {}
-    for line in raw.split("\n"):
-        line = line.strip()
-        if ":" in line:
-            key, _, val = line.partition(":")
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            fm[key] = val
-    return fm, body
-
-
-def extract_heading(body):
-    for line in body.split("\n"):
-        line = line.strip()
-        if line.startswith("# ") and not line.startswith("## "):
-            return line[2:].strip()
-    return ""
-
-
-def extract_original_name(body):
-    m = re.search(r"`([^`]+)`", body)
-    return m.group(1) if m else ""
-
-
-def extract_file_uri(body):
-    m = re.search(r"\(file:///([^)]+)\)", body)
-    if m:
-        return urllib.parse.unquote(m.group(1))
-    return ""
-
-
-def extract_series(body):
-    m = re.search(r"\*\*Series:\*\*\s*(.+?)(?:\\n|$)", body)
-    if m:
-        return m.group(1).strip()
-    return ""
-
-
-def is_vortexy_note(text):
-    return "Generated by Vortexy Graph Architect" in text
-
-
-def parse_author_title_from_filename(filename):
-    name_no_ext = os.path.splitext(filename)[0]
-    for sep in [" - ", " -", "- "]:
-        if sep in name_no_ext:
-            segments = [s.strip() for s in name_no_ext.split(sep) if s.strip()]
-            if len(segments) >= 2:
-                return segments[0], " - ".join(segments[1:])
-    return None, name_no_ext
-
-
-def strip_bad_prefix(raw):
-    raw = NUM_PREFIX_RE.sub("", raw)
-    for sep in [" - ", " _ ", " - "]:
-        if sep in raw:
-            first, rest = raw.split(sep, 1)
-            if first.strip().lower() in BAD_PREFIXES:
-                return rest.strip(), first.strip()
-    m = CHAPTER_PREFIX_RE.match(raw)
-    if m:
-        return m.group(2).strip(), m.group(1)
-    return raw, None
-
-
-def build_library_index(library_root):
-    index = {}
-    if not library_root or not os.path.exists(library_root):
-        return index
-    for root, dirs, files in os.walk(library_root):
-        for f in files:
-            index[f.lower()] = os.path.join(root, f)
-            no_ext = os.path.splitext(f)[0].lower()
-            if no_ext not in index:
-                index[no_ext] = os.path.join(root, f)
-    return index
-
-
-def find_pdf_in_library(original_name, lib_index):
-    if not original_name or not lib_index:
-        return None
-    key = original_name.lower()
-    if key in lib_index:
-        return lib_index[key]
-    no_ext = os.path.splitext(key)[0]
-    return lib_index.get(no_ext)
-
-
-def resolve_author_title(filepath, fm, body, existing_author, existing_title, lib_index, original_name):
-    author = "Unknown Auto"
-    title = ""
-    chapter = ""
-    pdf_path = None
-
-    file_uri = extract_file_uri(body)
-    if file_uri and os.path.exists(file_uri):
-        pdf_path = file_uri
-    elif original_name and lib_index:
-        found = find_pdf_in_library(original_name, lib_index)
-        if found:
-            pdf_path = found
-            file_uri = found
-
-    if pdf_path:
-        pdf_fname = os.path.basename(pdf_path)
-        f_author, f_title = parse_author_title_from_filename(pdf_fname)
-        if f_author:
-            author = normalize_author_name(f_author)
-            title = f_title
-        else:
-            title = os.path.splitext(pdf_fname)[0]
-
-    # Priority 2: existing frontmatter author if PDF didn't give clean result
-    if author == "Unknown Auto" and existing_author:
-        ex = existing_author.strip().lower()
-        if ex and ex not in ("unknown", "desconocido", "") and ex not in BAD_PREFIXES:
-            author = normalize_author_name(existing_author)
-
-    # Priority 3: parse from note filename
-    if author == "Unknown Auto":
-        note_fname = os.path.basename(filepath)
-        clean_raw, prefix = strip_bad_prefix(note_fname)
-        if prefix and prefix.lower() not in BAD_PREFIXES:
-            chapter = prefix
-        clean_raw = NUM_PREFIX_RE.sub("", clean_raw)
-        f_author, f_title = parse_author_title_from_filename(clean_raw.replace(".md", ""))
-        if f_author and f_author.lower() not in BAD_PREFIXES:
-            author = normalize_author_name(f_author)
-            if not title:
-                title = f_title
-        elif not chapter:
-            clean_raw2, prefix2 = strip_bad_prefix(note_fname.replace(".md", ""))
-            if prefix2:
-                chapter = prefix2
-
-    # Title fallback: existing heading, then cleaned filename
-    if not title:
-        if existing_title:
-            title = existing_title
-        else:
-            note_fname = os.path.basename(filepath)
-            clean_raw, _ = strip_bad_prefix(note_fname.replace(".md", ""))
-            title = clean_raw
-
-    # Clean up title: strip extensions, strip redundant author prefix, clean leading junk
-    title = EXTENSIONS_RE.sub('', title).strip()
-    title = re.sub(r'^[-–—_.,;:\s]+', '', title).strip()
-    cleaned = strip_author_prefix(title, author)
-    if cleaned != title:
-        title = cleaned
-    title = re.sub(r'^[-–—_.,;:\s]+', '', title).strip()
-    return author, title, file_uri, chapter
-
-
-def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
+def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg, enrich=True, clear_cache=False):
     if not os.path.exists(vault_path):
         print(f"Vault path not found: {vault_path}")
         sys.exit(1)
@@ -266,19 +46,37 @@ def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
     print("Building library index (one-time walk)...")
     lib_index = build_library_index(library_path)
     print(f"Library index built: {len(lib_index)} files indexed.\n")
+    author_genre_map = load_author_genre_map(cfg)
+    if author_genre_map:
+        print(f"Author-genre map loaded: {len(author_genre_map)} authors mapped.\n")
 
     subfolder_map = cfg.get("subfolder_map", DEFAULT_SUBFOLDER_MAP)
+
+    enricher = None
+    if enrich and cfg.get("isbn_enrichment", True):
+        enricher = MetadataEnricher(subfolder_map, dry_run=dry_run)
+        if clear_cache:
+            enricher.clear_cache()
+            print("Metadata cache cleared.\n")
+        print(f"ISBN enrichment: {'cache-only (dry-run)' if dry_run else 'ENABLED'}\n")
+
     vault_subfolders = {}
+
     if organize:
         for item in os.listdir(vault_path):
             item_path = os.path.join(vault_path, item)
             if os.path.isdir(item_path):
                 vault_subfolders[item] = item_path
 
-    print(f"Found {len(all_items)} .md files in vault.")
+    total = len(all_items)
+    print(f"Found {total} .md files in vault.")
+    if start_at:
+        all_items = all_items[start_at:]
     if limit:
         all_items = all_items[:limit]
-        print(f"Processing first {limit} notes...")
+    if start_at or limit:
+        start_msg = f"notes {start_at or 0}+" if start_at else f"first {limit}"
+        print(f"Processing {start_msg}...")
 
     print(f"Mode: {'DRY RUN (no changes)' if dry_run else 'LIVE'}")
     if organize:
@@ -321,17 +119,33 @@ def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
             stats["skipped"] += 1
             continue
 
+        enriched = {}
+        if enricher:
+            enriched = enricher.enrich(existing_isbn, title, author)
+
         correct_name = sanitize_filename(title if title.lower().startswith(author.lower()) else f"{author} - {title}")
         correct_filename = f"{correct_name}.md"
 
         target_subfolder = None
         if organize:
-            subfolder = find_subfolder(existing_category, subfolder_map)
-            if subfolder:
-                if subfolder in vault_subfolders:
-                    target_subfolder = subfolder
+            author_key = author.lower().strip()
+            db_subfolder = author_genre_map.get(author_key)
+            enrich_sf = enriched.get("suggested_category", "")
+
+            if db_subfolder and db_subfolder != "00 General Fiction":
+                target_subfolder = db_subfolder
+            elif enrich_sf and enrich_sf != "00 General Fiction":
+                target_subfolder = enrich_sf
+            else:
+                genre_sf = find_subfolder(title, subfolder_map)
+                if genre_sf and genre_sf != "00 General Fiction":
+                    target_subfolder = genre_sf
+                elif db_subfolder:
+                    target_subfolder = db_subfolder
                 else:
-                    target_subfolder = subfolder
+                    sf = find_subfolder(existing_category, subfolder_map)
+                    if sf:
+                        target_subfolder = sf
 
         target_dir = vault_path
         if target_subfolder:
@@ -340,11 +154,17 @@ def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
 
         needs_rename = (os.path.normpath(filepath) != os.path.normpath(target_path))
 
+        use_category = enriched.get("suggested_category") or existing_category
+        publisher = enriched.get("publisher", "")
+        publish_date = enriched.get("publish_date", "")
+        synopsis = enriched.get("synopsis", "")
+
         new_content = make_obsidian_content(
-            author=author, title=title, category=existing_category,
+            author=author, title=title, category=use_category,
             isbn=existing_isbn, original_name=original_name,
             file_uri=file_uri, series=existing_series, volume=existing_volume,
-            chapter=chapter
+            chapter=chapter, publisher=publisher, publish_date=publish_date,
+            synopsis=synopsis
         )
 
         if dry_run:
@@ -393,31 +213,18 @@ def fix_notes(vault_path, library_path, dry_run, limit, force, organize, cfg):
     print("=" * 50)
 
 
-def main():
+if __name__ == "__main__":
     cfg = load_config()
-    default_vault = cfg.get("vault_path", "")
-    default_library = cfg.get("library_path", "")
-    default_organize = cfg.get("organize", False)
-
     parser = argparse.ArgumentParser(description="Fix Obsidian MD Notes from Vortexy")
     parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
     parser.add_argument("--limit", type=int, default=0, help="Process only first N notes")
-    parser.add_argument("--force", action="store_true", help="Rewrite even if filename is already correct")
-    parser.add_argument("--vault", default=default_vault, help="Obsidian vault path")
-    parser.add_argument("--library", default=default_library, help="PDF library path")
-    parser.add_argument("--organize", action="store_true", default=default_organize, help="Move notes into subfolders by category")
+    parser.add_argument("--start-at", type=int, default=0, help="Skip first N notes before processing")
+    parser.add_argument("--vault", default=cfg.get("vault_path", ""), help="Obsidian vault path")
+    parser.add_argument("--library", default=cfg.get("library_path", ""), help="PDF library path")
+    parser.add_argument("--organize", action="store_true", default=cfg.get("organize", True), help="Move notes into subfolders by category")
+    parser.add_argument("--no-organize", action="store_false", dest="organize", help="Don't move notes into subfolders")
+    parser.add_argument("--enrich", action="store_true", default=True, help="Fetch book metadata from Open Library API (default)")
+    parser.add_argument("--no-enrich", action="store_false", dest="enrich", help="Disable metadata enrichment")
+    parser.add_argument("--clear-cache", action="store_true", default=False, help="Clear metadata cache before processing")
     args = parser.parse_args()
-
-    fix_notes(
-        vault_path=args.vault,
-        library_path=args.library,
-        dry_run=args.dry_run,
-        limit=args.limit,
-        force=args.force,
-        organize=args.organize,
-        cfg=cfg,
-    )
-
-
-if __name__ == "__main__":
-    main()
+    fix_notes(args.vault, args.library, args.dry_run, args.limit, args.start_at, args.organize, cfg, enrich=args.enrich, clear_cache=args.clear_cache)

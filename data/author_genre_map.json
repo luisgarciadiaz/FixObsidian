@@ -1,0 +1,6 @@
+{
+  "_description": "Maps normalized author names to vault subfolder names. Add entries below.",
+  "_format": "\"normalized_author_name\": \"Subfolder Name\"",
+  "_example": "\"stephen king\": \"01 Horror\"",
+  "authors": {}
+}
