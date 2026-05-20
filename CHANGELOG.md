@@ -1,5 +1,32 @@
 # CHANGELOG
 
+## v1.3.0 (2026-05-20)
+
+### Added
+- **Metadata enrichment pipeline** (`core/vortexy_enricher.py`) — Fetches book metadata from free public Open Library API:
+  - `publisher`, `publish_date`, and `synopsis` fields in frontmatter and body
+  - Auto-corrected genre subfolder routing based on API subject genres
+  - JSON cache layer (`data/metadata_cache.json`) prevents duplicate API calls
+- **Parsing module** (`core/vortexy_parsers.py`) — Dedicated frontmatter/body parsing functions extracted from fixer
+- **Resolver module** (`core/vortexy_resolver.py`) — Standalone author/title resolution with expanded BAD_PREFIXES
+- **Library indexing** (`core/vortexy_library.py`) — PDF library index saved as pickle for fast re-scans
+- **New CLI flags**:
+  - `--enrich` / `--no-enrich` — Enable/disable Open Library metadata enrichment
+  - `--clear-cache` — Clear metadata cache before processing
+  - `--start-at N` — Skip first N notes (resume interrupted runs)
+  - `--no-organize` — Disable subfolder organization
+- **Documentation** (`docs/`) — User guide, developer reference, troubleshooting guide, and architectural docs
+- **Author-genre map JSON** (`data/author_genre_map.json`) — Local JSON fallback when Postgres is unavailable
+
+### Changed
+- Genre routing priority updated: Author map > **Enrichment suggested category** > Title keywords > Author map fallback > Category keywords
+- `fix_obsidian_notes.py` — Enrichment enabled by default; batches of 100 with per-batch progress reporting
+- `vortexy_obsidian.py` — `make_obsidian_content()` now accepts `publisher`, `publish_date`, `synopsis` parameters
+- `vortexy_config.py` — Supports `isbn_enrichment` and `enrichment_cache_path` config keys
+
+### Fixed
+- Empty note body no longer crashes when looking for Vortexy footer
+
 ## v1.2.0 (2026-05-19)
 
 ### Added

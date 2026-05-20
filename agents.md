@@ -12,12 +12,18 @@ content.
 - `tools/fix_obsidian_notes.py` — Main fixer script (standalone, no DB needed)
 - `core/vortexy_obsidian.py` — Note template and helpers (shared with Sorter)
 - `core/vortexy_config.py` — Config loading
-- `core/vortexy_library.py` — PDF library index and search
-- `core/vortexy_resolver.py` — Author/title resolution from filenames/PDFs
+- `core/vortexy_parsers.py` — Frontmatter/body parsing and Vortexy note detection
+- `core/vortexy_resolver.py` — Author/title/chapter resolution from filenames/PDFs
+- `core/vortexy_enricher.py` — Open Library API metadata enrichment (ISBN lookup, caching)
+- `core/vortexy_library.py` — PDF library index and search (pickle-backed)
 - `core/vortexy_db.py` — Postgres author_genre_map loader
 - `tools/enrich_author_genres.py` — OpenLibrary API author genre classification
 - `tools/extract_authors.py` — Extract unique authors from vault for manual mapping
 - `config.json` — All settings (paths, subfolder map, options)
+- `data/metadata_cache.json` — Open Library API response cache
+- `data/library_index.pkl` — Pickled library index for fast re-scans
+- `data/author_genre_map.json` — Local JSON fallback when Postgres is unavailable
+- `docs/` — User guide, developer reference, troubleshooting, and architecture docs
 - `.env.example` — Template for `.env` (copy to `.env` and edit)
 
 ## Vault Location
@@ -66,7 +72,7 @@ enable subfolder placement.
 # Dry run — preview changes
 python tools/fix_obsidian_notes.py --dry-run
 
-# Run dry-run with Open Library metadata enrichment
+# Dry run with enrichment (cache only, no live API)
 python tools/fix_obsidian_notes.py --enrich --dry-run
 
 # Process and enrich first 100 notes
@@ -74,6 +80,15 @@ python tools/fix_obsidian_notes.py --limit 100 --enrich
 
 # Process all notes and move into subfolders by category
 python tools/fix_obsidian_notes.py --organize
+
+# Process without enrichment (fix-only mode)
+python tools/fix_obsidian_notes.py --no-enrich
+
+# Resume interrupted run (skip first 500 notes)
+python tools/fix_obsidian_notes.py --start-at 500
+
+# Clear cache and refetch all metadata
+python tools/fix_obsidian_notes.py --clear-cache --enrich
 
 # Override paths via CLI
 python tools/fix_obsidian_notes.py --vault "G:\Path\To\Vault" --library "D:\Library"
@@ -88,6 +103,8 @@ The fixer resolves author/title from these sources (in priority order):
 3. Parsed from note filename
 
 Bad prefixes are stripped from filenames: `an`, `el`, `los`, `la`, `mi`, `no`, `lg`, `m`, `dune`, `dragon`, etc.
+
+Numeric chapter prefixes (e.g., `04 -`, `03A -`) are extracted and saved as the `chapter` frontmatter field.
 
 ## Author Genre Mapping (Postgres)
 
@@ -156,5 +173,6 @@ The enrichment feature fetches book metadata from the free public **Open Library
 - **Fixed** — notes rewritten with corrected author/title/frontmatter
 - **Renamed** — notes whose filename was corrected
 - **Moved** — notes placed into category subfolders via `--organize`
+- **Created** — new notes generated (when run via Sorter integration)
 - **Skipped** — notes with no usable author/title
 - **Orphaned** — notes without the Vortexy footer (not processed)

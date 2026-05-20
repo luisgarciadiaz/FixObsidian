@@ -10,11 +10,17 @@ pip install python-dotenv  # optional, for .env support
 # Preview changes (safe)
 python tools/fix_obsidian_notes.py --dry-run
 
-# Process 500 notes
-python tools/fix_obsidian_notes.py --limit 500
+# Process 500 notes with metadata enrichment
+python tools/fix_obsidian_notes.py --limit 500 --enrich
 
-# Process all notes and organize into subfolders
+# Process and organize into subfolders
 python tools/fix_obsidian_notes.py --organize
+
+# Fix-only (no enrichment) for speed
+python tools/fix_obsidian_notes.py --no-enrich
+
+# Resume interrupted run
+python tools/fix_obsidian_notes.py --start-at 500
 ```
 
 ## Configuration
@@ -27,10 +33,13 @@ python tools/fix_obsidian_notes.py --organize
 
 - **Fix filenames** to `Author - Title.md` format
 - **Normalize author names** (handles "Last, First" → "First Last", multiple authors)
-- **Add frontmatter** — `title`, `tags`, `series`, `volume`, `vortexy_version`, `date_organized`
+- **Add frontmatter** — `title`, `tags`, `series`, `volume`, `chapter`, `vortexy_version`, `date_organized`
+- **Metadata enrichment** — `--enrich` fetches publisher, publish date, and synopsis from Open Library API
 - **Open Library links** — clickable ISBN links when ISBN is present
-- **Subfolder organization** — `--organize` moves notes into genre subfolders by category
+- **Auto-correct categories** — genre routing based on API subjects, author map, and keyword matching
+- **Subfolder organization** — `--organize` moves notes into 16 genre subfolders
 - **PDF discovery** — re-scans library to find file URIs for orphaned notes
+- **Chapter extraction** — numeric prefixes (e.g., `04 -`) saved as `chapter` frontmatter field
 
 ## Subfolder Categories
 
@@ -61,7 +70,12 @@ The 16 genre subfolders used for organization:
 |------|-------------|
 | `--dry-run` | Preview changes without writing |
 | `--limit N` | Process only first N notes |
+| `--start-at N` | Skip first N notes (resume interrupted run) |
 | `--organize` | Move notes into category subfolders |
+| `--no-organize` | Don't move notes into subfolders |
+| `--enrich` | Fetch book metadata from Open Library API (default) |
+| `--no-enrich` | Disable metadata enrichment |
+| `--clear-cache` | Clear metadata cache before processing |
 | `--force` | Rewrite even if filename already correct |
 | `--vault PATH` | Override vault path |
 | `--library PATH` | Override library path |
@@ -75,8 +89,10 @@ The fixer prints a summary at the end:
   Fixed:     150
   Renamed:   45
   Moved:     12
+  Created:   0
   Skipped:   5
   Orphaned:  2340 (non-Vortexy notes)
+  Total time: 123.4s
 ==================================================
 ```
 

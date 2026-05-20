@@ -40,11 +40,14 @@ class MetadataEnricher:
         self._cache = {}
         self._save_cache()
 
-    def _cache_key(self, isbn, title, author):
+    def _cache_key(self, isbn, title, author, year=None):
         clean = re.sub(r'[^0-9Xx]', '', isbn or "") if isbn else ""
         if clean:
             return f"isbn:{clean}"
-        return f"title:{title.lower().strip()}|{author.lower().strip()}"
+        key = f"title:{title.lower().strip()}|{author.lower().strip()}"
+        if year:
+            key += f"|{year}"
+        return key
 
     def _fetch(self, url, retries=2):
         for attempt in range(retries + 1):
@@ -138,7 +141,9 @@ class MetadataEnricher:
             book = self._search(title=title, author=author)
         if not book:
             self._cache[key] = {}
-            self._save_cache()
+            self._dirty += 1
+            if self._dirty % 50 == 0:
+                self._save_cache()
             return {}
         wd = self._work(book.get("work_key", ""))
         subjects = book.get("subjects", []) + wd.get("subjects", [])
@@ -146,7 +151,9 @@ class MetadataEnricher:
         result["publish_date"] = book.get("publish_date", "")
         result["synopsis"] = wd.get("synopsis", "")
         result["suggested_category"] = self._map_subjects(subjects) or ""
-        time.sleep(0.5)
+        time.sleep(0.25)
         self._cache[key] = result
-        self._save_cache()
+        self._dirty += 1
+        if self._dirty % 50 == 0:
+            self._save_cache()
         return result

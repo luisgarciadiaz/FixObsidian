@@ -223,6 +223,9 @@ def fix_notes(vault_path, library_path, dry_run, limit, start_at, organize, cfg,
 
         print(f"  Batch {batch_idx+1}/{batch_count} ({b_start}-{b_end}): {batch_fixed} fixed, {(time.time()-t_batch):.1f}s, running total: {stats['fixed']} fixed, {stats['orphaned']} orphaned")
 
+    if enricher:
+        enricher.flush()
+
     print("\n" + "=" * 50)
     print(f"  Fixed:     {stats['fixed']}")
     print(f"  Renamed:   {stats['renamed']}")
