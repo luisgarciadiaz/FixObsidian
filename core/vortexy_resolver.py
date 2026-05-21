@@ -9,7 +9,7 @@ BAD_PREFIXES = {"an", "el", "los", "la", "mi", "no", "lg", "m", "dune", "dragon"
                 "isabel", "gabriel", "mao", "the", "de", "las", "del"}
 NUM_PREFIX_RE = re.compile(r"^\d{1,2}\s*[- ]\s*")
 CHAPTER_PREFIX_RE = re.compile(r"^(\d{2}[A-Z]?)\s*-\s+(.+)$")
-EXTENSIONS_RE = re.compile(r'\.(pdf|epub|mobi|azw3|djvu|mp3|mp4|wma|wmv|avi|mkv|srt|vtt|zip|rar)$', re.IGNORECASE)
+EXTENSIONS_RE = re.compile(r'\.(pdf|epub|mobi|azw3|djvu|mp3|mp4|wma|wmv|avi|mkv|srt|vtt|zip|rar|txt)$', re.IGNORECASE)
 BRACKET_INFO_RE = re.compile(r'\[([^\]]+)\]')
 YEAR_RE = re.compile(r'\b(1[89]\d{2}|20[0-2]\d)\b')
 ISBN_PREFIX_RE = re.compile(r'^[\d\-]{10,17}\s+')
@@ -29,8 +29,15 @@ def strip_author_prefix(text, author):
             prefix, rest = text.split(sep, 1)
             if _norm_compare(prefix) == norm_author:
                 return rest.strip()
-    if _norm_compare(text).startswith(norm_author):
-        rest = text[len(author):].strip().lstrip('-\u2013\u2014_ ').strip()
+    norm_text = _norm_compare(text)
+    if norm_text.startswith(norm_author):
+        pos = 0
+        ai = 0
+        while ai < len(norm_author) and pos < len(text):
+            if _norm_compare(text[pos]) == norm_author[ai]:
+                ai += 1
+            pos += 1
+        rest = text[pos:].strip().lstrip('-\u2013\u2014_ ').strip()
         if rest:
             return rest
     return text

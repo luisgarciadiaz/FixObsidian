@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+import threading
 import urllib.request
 import urllib.parse
 import urllib.error
@@ -17,6 +18,7 @@ class MetadataEnricher:
         self.cache_path = cache_path or DEFAULT_CACHE
         self._cache = {}
         self._dirty = 0
+        self._lock = threading.Lock()
         self._load_cache()
 
     def _load_cache(self):
@@ -32,13 +34,15 @@ class MetadataEnricher:
             json.dump(self._cache, f, indent=2, ensure_ascii=False)
 
     def flush(self):
-        if self._dirty > 0:
-            self._save_cache()
-            self._dirty = 0
+        with self._lock:
+            if self._dirty > 0:
+                self._save_cache()
+                self._dirty = 0
 
     def clear_cache(self):
-        self._cache = {}
-        self._save_cache()
+        with self._lock:
+            self._cache = {}
+            self._save_cache()
 
     def _cache_key(self, isbn, title, author, year=None):
         clean = re.sub(r'[^0-9Xx]', '', isbn or "") if isbn else ""
@@ -126,8 +130,9 @@ class MetadataEnricher:
 
     def enrich(self, isbn, title, author, year=None):
         key = self._cache_key(isbn, title, author, year)
-        if key in self._cache:
-            return self._cache[key]
+        with self._lock:
+            if key in self._cache:
+                return self._cache[key]
         if self.dry_run:
             return {}
         result = {}
@@ -140,10 +145,11 @@ class MetadataEnricher:
         if not book and title and author:
             book = self._search(title=title, author=author)
         if not book:
-            self._cache[key] = {}
-            self._dirty += 1
-            if self._dirty % 50 == 0:
-                self._save_cache()
+            with self._lock:
+                self._cache[key] = {}
+                self._dirty += 1
+                if self._dirty % 50 == 0:
+                    self._save_cache()
             return {}
         subjects = book.get("subjects", [])
         wd = {}
@@ -155,8 +161,9 @@ class MetadataEnricher:
         result["synopsis"] = wd.get("synopsis", "")
         result["suggested_category"] = self._map_subjects(subjects) or ""
         time.sleep(0.05)
-        self._cache[key] = result
-        self._dirty += 1
-        if self._dirty % 50 == 0:
-            self._save_cache()
+        with self._lock:
+            self._cache[key] = result
+            self._dirty += 1
+            if self._dirty % 50 == 0:
+                self._save_cache()
         return result
