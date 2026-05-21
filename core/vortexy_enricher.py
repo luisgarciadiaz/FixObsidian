@@ -2,6 +2,7 @@ import json
 import os
 import re
 import time
+import unicodedata
 import threading
 import urllib.request
 import urllib.parse
@@ -9,6 +10,9 @@ import urllib.error
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DEFAULT_CACHE = os.path.join(CACHE_DIR, "metadata_cache.json")
+
+def _norm_accents(s):
+    return ''.join(c for c in unicodedata.normalize('NFKD', s.lower().strip()) if not unicodedata.combining(c))
 
 
 class MetadataEnricher:
@@ -48,7 +52,7 @@ class MetadataEnricher:
         clean = re.sub(r'[^0-9Xx]', '', isbn or "") if isbn else ""
         if clean:
             return f"isbn:{clean}"
-        key = f"title:{title.lower().strip()}|{author.lower().strip()}"
+        key = f"title:{_norm_accents(title)}|{_norm_accents(author)}"
         if year:
             key += f"|{year}"
         return key
@@ -80,7 +84,14 @@ class MetadataEnricher:
         r["subjects"] = [s.get("name", "") for s in book.get("subjects", [])]
         works = book.get("works", [])
         r["work_key"] = works[0].get("key", "") if works else ""
+        cover = book.get("cover", {})
+        r["cover_url"] = cover.get("medium", "") if cover else self._cover_url_from_cover_i(book.get("cover_i"))
         return r
+
+    def _cover_url_from_cover_i(self, cover_i):
+        if cover_i:
+            return f"https://covers.openlibrary.org/b/id/{cover_i}-M.jpg"
+        return ""
 
     def _search(self, isbn="", title="", author=""):
         params = []
@@ -102,6 +113,9 @@ class MetadataEnricher:
         r["publisher"] = ", ".join(pubs) if isinstance(pubs, list) else ""
         r["subjects"] = doc.get("subject", [])
         r["work_key"] = doc.get("key", "")
+        isbns = doc.get("isbn", [])
+        r["discovered_isbn"] = isbns[0] if isbns else ""
+        r["cover_url"] = self._cover_url_from_cover_i(doc.get("cover_i"))
         return r
 
     def _work(self, work_key):
@@ -113,7 +127,9 @@ class MetadataEnricher:
         desc = data.get("description", "")
         if isinstance(desc, dict):
             desc = desc.get("value", "")
-        return {"synopsis": desc, "subjects": data.get("subjects", [])}
+        covers = data.get("covers", [])
+        cover_url = self._cover_url_from_cover_i(covers[0]) if covers else ""
+        return {"synopsis": desc, "subjects": data.get("subjects", []), "cover_url": cover_url}
 
     def _map_subjects(self, subjects):
         if not subjects:
@@ -128,7 +144,26 @@ class MetadataEnricher:
                         best = folder
         return best
 
+    def _is_garbage_request(self, isbn, title, author):
+        clean_isbn = re.sub(r'[^0-9Xx]', '', isbn or "") if isbn else ""
+        if clean_isbn and len(clean_isbn) < 10:
+            clean_isbn = ""
+        if clean_isbn:
+            return False
+        if not title or not title.strip():
+            return True
+        tstrip = title.strip()
+        if len(tstrip) < 3:
+            return True
+        if re.match(r'^[\d\s\-\.]+$', tstrip):
+            return True
+        if author == "Unknown Author":
+            return True
+        return False
+
     def enrich(self, isbn, title, author, year=None):
+        if self._is_garbage_request(isbn, title, author):
+            return {}
         key = self._cache_key(isbn, title, author, year)
         with self._lock:
             if key in self._cache:
@@ -160,6 +195,9 @@ class MetadataEnricher:
         result["publish_date"] = book.get("publish_date", "")
         result["synopsis"] = wd.get("synopsis", "")
         result["suggested_category"] = self._map_subjects(subjects) or ""
+        result["discovered_isbn"] = book.get("discovered_isbn", "")
+        result["cover_url"] = book.get("cover_url", "") or wd.get("cover_url", "")
+        result["_ts"] = time.time()
         time.sleep(0.05)
         with self._lock:
             self._cache[key] = result

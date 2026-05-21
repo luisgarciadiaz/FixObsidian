@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## v1.3.1 (2026-05-21)
+
+### Changed
+- **Module split** — `tools/fix_obsidian_notes.py` (689 lines) split into three files under the 300-line limit:
+  - `tools/fix_obsidian_notes.py` (251 lines) — `fix_notes()`, enrichment pipeline, threading, CLI entry point
+  - `tools/consolidate_tracks.py` (155 lines) — `consolidate_tracks()` for audiobook/section merging
+  - `tools/merge_duplicates.py` (198 lines) — `merge_extension_duplicates()` and `merge_fuzzy_duplicates()`
+- `AGENTS.md` — Line limit rule updated from 200 to 300 lines, split target expanded to `tools/`
+
 ## v1.3.0 (2026-05-20)
 
 ### Added

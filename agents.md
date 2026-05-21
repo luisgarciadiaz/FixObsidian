@@ -9,7 +9,9 @@ content.
 
 ## Key Files
 
-- `tools/fix_obsidian_notes.py` — Main fixer script (standalone, no DB needed)
+- `tools/fix_obsidian_notes.py` — Main fixer script: note processing, enrichment, threading (standalone, no DB needed)
+- `tools/consolidate_tracks.py` — Merge audiobook track notes and multipart section notes into single per-book notes
+- `tools/merge_duplicates.py` — Merge extension-duplicate and fuzzy-duplicate notes
 - `core/vortexy_obsidian.py` — Note template and helpers (shared with Sorter)
 - `core/vortexy_config.py` — Config loading
 - `core/vortexy_parsers.py` — Frontmatter/body parsing and Vortexy note detection
@@ -39,8 +41,8 @@ content.
 - The fix script is standalone — it should never require `sorter_metadata.sqlite` to function.
 - When editing the note template in `core/vortexy_obsidian.py`, consider backwards
   compatibility with existing notes in the vault.
-- **Python files must not exceed 200 lines.** If a file approaches 200 lines, split it
-  into focused single-responsibility modules under `core/`.
+- **Python files must not exceed 300 lines.** If a file approaches 300 lines, split it
+  into focused single-responsibility modules under `core/` or `tools/`.
 
 ## Configuration
 

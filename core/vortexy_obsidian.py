@@ -43,21 +43,30 @@ def make_category_tag(cat_name):
     return f"#{tag}" if tag else "#Uncategorized"
 
 DEFAULT_SUBFOLDER_MAP = {
-    "00 General Fiction": ["literature", "fiction", "novel", "story", "cuento", "relato", "novela"],
+    "00 General Fiction": ["literature", "fiction", "novel", "story", "cuento", "relato", "novela",
+                            "literatura latinoamericana", "realismo magico", "realismo mágico",
+                            "narrativa espanola", "narrativa española", "ficcion española",
+                            "ficción española", "narrativa latinoamericana", "narrativa hispanoamericana"],
     "01 Horror": ["horror", "terror", "lovecraft", "king", "macabre", "gothic", "dark fantasy"],
     "02 Fantasy": ["fantasy", "fantasia", "magic", "magia", "sword", "dragon", "elfo", "myth"],
     "03 Science Fiction": ["science fiction", "sci-fi", "scifi", "ciencia ficcion", "space", "dystopia"],
     "04 Crime & Mystery": ["crime", "mystery", "misterio", "detective", "noir", "thriller", "suspense"],
     "05 Romance": ["romance", "love", "amor", "erotic", "erotico", "novela rosa"],
     "06 Historical Fiction": ["historical fiction", "historical novel", "novela historica", "historical"],
-    "07 Biography & Autobiography": ["biography", "autobiography", "biografia", "memoir", "vida"],
+    "07 Biography & Autobiography": ["biography", "autobiography", "biografia", "memoir", "vida",
+                                      "testimonio", "cronica", "crónica"],
     "08 Memoir & Self-Help": ["self-help", "autoayuda", "memoir", "personal development", "superacion"],
-    "09 History": ["history", "historia", "ancient", "medieval", "war", "guerra", "civilization"],
+    "09 History": ["history", "historia", "ancient", "medieval", "war", "guerra", "civilization",
+                    "cronica historica", "crónica histórica", "guerra civil espanola", "guerra civil española"],
     "10 Technical & Programming": ["technical", "programming", "programacion", "computer", "software", "code", "engineering", "technology"],
-    "11 Philosophy": ["philosophy", "filosofia", "ethics", "logic", "pensamiento", "wisdom"],
+    "11 Philosophy": ["philosophy", "filosofia", "ethics", "logic", "pensamiento", "wisdom",
+                       "pensamiento filosofico", "ensayo filosofico", "ensayo filosófico"],
     "12 Business & Economics": ["business", "economics", "economia", "management", "finance", "marketing", "entrepreneur"],
     "13 Science & Technology": ["science", "technology", "tecnologia", "physics", "chemistry", "biology", "math"],
-    "14 Graphic & Literary Arts": ["graphic", "literary arts", "arte", "comic", "graphic novel", "poetry", "poesia", "poem", "sonnet", "verse", "drama", "play", "theatre", "theater"],
+    "14 Graphic & Literary Arts": ["graphic", "literary arts", "arte", "comic", "graphic novel",
+                                    "poetry", "poesia", "poem", "sonnet", "verse", "drama", "play",
+                                    "theatre", "theater", "teatro espanol", "teatro español",
+                                    "teatro latinoamericano", "drama espanol", "drama español"],
     "15 Media & Archive": ["media", "archive", "reference", "reference", "diccionario", "encyclopedia"],
 }
 
@@ -78,7 +87,7 @@ def find_subfolder(cat_name, subfolder_map=None):
                     best_folder = folder
     return best_folder
 
-def make_obsidian_content(author, title, category, isbn, original_name, file_uri, version="v1.5.0", series="", volume="", chapter="", publisher="", publish_date="", synopsis=""):
+def make_obsidian_content(author, title, category, isbn, original_name, file_uri, version="v1.5.0", series="", volume="", chapter="", publisher="", publish_date="", synopsis="", cover_url="", read_status="to-read"):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cat_slug = slugify_category(category)
     cat_tag = make_category_tag(category)
@@ -89,7 +98,7 @@ def make_obsidian_content(author, title, category, isbn, original_name, file_uri
             isbn_display = f"\n- **ISBN:** [{isbn_clean}](https://openlibrary.org/isbn/{isbn_clean})"
     file_link = ""
     if file_uri:
-        safe_uri = "file:///" + urllib.parse.quote(str(file_uri).replace("\\", "/"))
+        safe_uri = "file:///" + urllib.parse.quote(str(file_uri).replace("\\\\", "/"))
         file_link = f"\n> [!abstract] File Link\n> [Open Local File]({safe_uri})"
     publisher_line = f"\n- **Publisher:** {publisher}" if publisher else ""
     publish_date_line = f"\n- **Publish Date:** {publish_date}" if publish_date else ""
@@ -101,28 +110,30 @@ def make_obsidian_content(author, title, category, isbn, original_name, file_uri
     if chapter:
         chapter_line = f"\n- **Chapter:** {chapter}"
     synopsis_block = f'\n\n> [!info] Synopsis\n> {synopsis}' if synopsis else ""
+    cover_block = f'\n\n![cover|200]({cover_url})' if cover_url else ""
 
     fm_series = f'\nseries: "{series}"' if series else ""
     fm_volume = f'\nvolume: "{volume}"' if volume else ""
     fm_chapter = f'\nchapter: "{chapter}"' if chapter else ""
     fm_publisher = f'\npublisher: "{publisher}"' if publisher else ""
     fm_publish_date = f'\npublish_date: "{publish_date}"' if publish_date else ""
+    fm_read_status = f'\nread_status: {read_status}'
 
     content = f"""---
 title: "{title}"
 author: "[[{author}]]"
 category: {category}
 tags: [vortexy, {cat_slug}]
-isbn: "{isbn or ''}"{fm_series}{fm_volume}{fm_chapter}{fm_publisher}{fm_publish_date}
+isbn: "{isbn or ''}"{fm_series}{fm_volume}{fm_chapter}{fm_publisher}{fm_publish_date}{fm_read_status}
 date_organized: {timestamp}
 vortexy_version: {version}
 ---
 
 # {title}
-
+{cover_block}
 - **Author:** [[{author}]]
 - **Category:** {cat_tag}{isbn_display}{publisher_line}{publish_date_line}{series_line}{chapter_line}
-- **Original Name:** `{original_name}`{file_link}{synopsis_block}
+- **Original Name:** {original_name}{file_link}{synopsis_block}
 
 ---
 *Generated by Vortexy Graph Architect*
@@ -178,6 +189,7 @@ def create_obsidian_note(config, meta, skip_if_exists=True, note_index=None, tar
             return {"status": "exists"}
     elif os.path.exists(note_path):
         return {"status": "exists"}
+    read_status = config.get("read_status", "to-read")
     content = make_obsidian_content(
         author=author,
         title=title,
@@ -185,7 +197,8 @@ def create_obsidian_note(config, meta, skip_if_exists=True, note_index=None, tar
         isbn=isbn,
         original_name=filename,
         file_uri=final_path,
-        version=config.get('version', 'latest')
+        version=config.get('version', 'latest'),
+        read_status=read_status
     )
     try:
         with open(note_path, "w", encoding="utf-8") as f:
